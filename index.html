@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>BPMN Modeler (Novo / Abrir / Baixar)</title>
+
+  <!-- CSS obrigatório do bpmn-js (pre-packaged) -->
+  <link rel="stylesheet" href="https://unpkg.com/bpmn-js@18.16.1/dist/assets/diagram-js.css">
+  <link rel="stylesheet" href="https://unpkg.com/bpmn-js@18.16.1/dist/assets/bpmn-js.css">
+  <link rel="stylesheet" href="https://unpkg.com/bpmn-js@18.16.1/dist/assets/bpmn-font/css/bpmn.css">
+
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; }
+    header { padding: 10px 12px; border-bottom: 1px solid #ddd; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    #canvas { height: calc(100vh - 56px); width: 100%; }
+    button { padding: 8px 10px; cursor: pointer; }
+    .spacer { flex: 1; }
+    .status { font-size: 12px; color: #333; }
+    input[type="file"] { max-width: 320px; }
+  </style>
+</head>
+
+<body>
+
+<header>
+  <button id="btnNew" title="Criar um diagrama em branco">Novo</button>
+
+  <label>
+    <input id="file" type="file" accept=".bpmn,.xml" />
+  </label>
+
+  <button id="btnDownload" title="Baixar o BPMN atual">Download BPMN</button>
+
+  <div class="spacer"></div>
+  <span class="status" id="status">Pronto.</span>
+</header>
+
+<div id="canvas"></div>
+
+<!-- JS do bpmn-js Modeler (pre-packaged) -->
+<script src="https://unpkg.com/bpmn-js@18.16.1/dist/bpmn-modeler.development.js"></script>
+
+<script>
+  const statusEl = document.getElementById('status');
+
+  function setStatus(msg) {
+    statusEl.textContent = msg;
+  }
+
+  // Instancia o modeler
+  const modeler = new BpmnJS({
+    container: '#canvas'
+  });
+
+  async function zoomFit() {
+    try {
+      modeler.get('canvas').zoom('fit-viewport');
+    } catch (_) { /* ignore */ }
+  }
+
+  // 1) NOVO (zero)
+  async function newDiagram() {
+    setStatus('Criando diagrama em branco...');
+    try {
+      await modeler.createDiagram();
+      await zoomFit();
+      setStatus('Diagrama em branco pronto.');
+    } catch (err) {
+      console.error(err);
+      setStatus('Erro ao criar diagrama.');
+      alert('Erro ao criar diagrama em branco.');
+    }
+  }
+
+  // 2) ABRIR (upload arquivo BPMN/XML)
+  async function openFile(file) {
+    if (!file) return;
+
+    setStatus(`Carregando: ${file.name} ...`);
+    try {
+      const xml = await file.text();
+      // importXML é o método padrão para carregar BPMN 2.0 XML [1](https://docs.gitlab.com/user/project/pages/public_folder/)[2](https://libraries.io/npm/diagram-js-grid)
+      const { warnings } = await modeler.importXML(xml);
+      await zoomFit();
+
+      if (warnings && warnings.length) {
+        console.warn('Warnings:', warnings);
+        setStatus(`Carregado com avisos (${warnings.length}).`);
+      } else {
+        setStatus('Arquivo carregado com sucesso.');
+      }
+    } catch (err) {
+      console.error(err);
+      setStatus('Erro ao carregar arquivo.');
+      alert('Erro ao carregar BPMN. Verifique se o arquivo é um BPMN 2.0 válido.');
+    }
+  }
+
+  // 3) BAIXAR (exportar BPMN)
+  async function downloadBPMN() {
+    setStatus('Gerando BPMN para download...');
+    try {
+      const { xml } = await modeler.saveXML({ format: true });
+      const filename = suggestFileName() || 'diagram.bpmn';
+      downloadText(filename, xml, 'application/xml');
+      setStatus(`Download gerado: ${filename}`);
+    } catch (err) {
+      console.error(err);
+      setStatus('Erro ao gerar download.');
+      alert('Erro ao exportar BPMN.');
+    }
+  }
+
+  function downloadText(filename, text, mime) {
+    const blob = new Blob([text], { type: mime });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function suggestFileName() {
+    // Se você quiser, pode melhorar isso com nome do processo/id, etc.
+    return 'diagram.bpmn';
+  }
+
+  // Eventos UI
+  document.getElementById('btnNew').addEventListener('click', newDiagram);
+
+  document.getElementById('file').addEventListener('change', (e) => {
+    const file = e.target.files && e.target.files[0];
+    openFile(file);
+    // permite reabrir o mesmo arquivo (se o usuário escolher o mesmo de novo)
+    e.target.value = '';
+  });
+
+  document.getElementById('btnDownload').addEventListener('click', downloadBPMN);
+
+  // Inicializa com um diagrama vazio
+  newDiagram();
+</script>
+
+</body>
+</html>
